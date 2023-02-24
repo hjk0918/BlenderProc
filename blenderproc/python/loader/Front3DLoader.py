@@ -7,6 +7,7 @@ import bpy
 import mathutils
 import numpy as np
 from urllib.request import urlretrieve
+from collections import defaultdict
 
 from blenderproc.python.material import MaterialLoaderUtility
 from blenderproc.python.utility.LabelIdMapping import LabelIdMapping
@@ -162,6 +163,8 @@ class Front3DLoader:
             # set two custom properties, first that it is a 3D_future object and second the category_id
             obj.set_cp("is_3D_future", True)
             obj.set_cp("category_id", label_mapping.id_from_label(used_obj_name.lower()))
+            obj.set_cp("uid", mesh_data["uid"])
+            obj.set_cp("has_3D_future_texture", False)
 
             # get the material uid of the current mesh data
             current_mat = mesh_data["material"]
@@ -174,6 +177,7 @@ class Front3DLoader:
             # If there should be a material used
             if used_mat:
                 if used_mat["texture"]:
+                    obj.set_cp("has_3D_future_texture", True)
                     # extract the has folder is from the url and download it if necessary
                     hash_folder = Front3DLoader._extract_hash_nr_for_texture(used_mat["texture"], front_3D_texture_path)
                     if hash_folder in used_materials_based_on_texture and "ceiling" not in used_obj_name.lower():
@@ -390,11 +394,14 @@ class Front3DLoader:
         # this rotation matrix rotates the given quaternion into the blender coordinate system
         blender_rot_mat = mathutils.Matrix.Rotation(radians(-90), 4, 'X')
         created_objects = []
+        uid_instance_cnt = defaultdict(int) # record the number of instances of each uid
+
         # for each room
         for room_id, room in enumerate(data["scene"]["room"]):
             # for each object in that room
             for child in room["children"]:
                 if "furniture" in child["instanceid"]:
+                    found = False
                     # find the object where the uid matches the child ref id
                     for obj in all_loaded_furniture:
                         if obj.get_cp("uid") == child["ref"]:
@@ -404,6 +411,13 @@ class Front3DLoader:
                             else:
                                 # if it is the first time use the object directly
                                 new_obj = obj
+
+                            if not found:
+                                found = True    # only count the first instance of each uid
+                                uid_instance_cnt[child["ref"]] += 1
+
+                            # all mesh of the same instance should have the same uid_instance_id
+                            new_obj.set_cp("uid_instance_id", uid_instance_cnt[child["ref"]])
 
                             created_objects.append(new_obj)
                             new_obj.set_cp("is_used", True)

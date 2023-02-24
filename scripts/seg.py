@@ -77,7 +77,7 @@ def build_segmentation_map(room_objs, room_bbox, max_res, res=None):
     return instance_map, res
 
 
-def build_metadata(id_map, room_obj_dict):
+def build_metadata(id_map, instances, room_bbox):
     """Builds metadata of the room.
 
     Args:
@@ -89,27 +89,23 @@ def build_metadata(id_map, room_obj_dict):
     """
 
     metadata = {}
-    metadata['scene_bbox'] = room_obj_dict['bbox'].flatten().tolist()
-
-    room_objs = room_obj_dict['objects']
-    name2objs = {x['name']: x for x in room_objs}
+    metadata['scene_bbox'] = room_bbox.flatten().tolist()
 
     metadata['instances'] = []
-    for name, id in id_map.items():
-        if name not in name2objs:
-            raise ValueError(f'Object {name} not found in room_obj_dict.')
+    for instance in instances:
+        volume = np.prod(instance['aabb'][1] - instance['aabb'][0])
+        name = instance['name']
 
-        obj = name2objs[name]
-
-        if obj['volume'] < 1e-6:
-            print(f'Warning: {name} has volume {obj["volume"]} and is ignored.')
+        if volume < 1e-6:
+            print(f'Warning: {name} has volume {volume} and is ignored.')
             continue
 
         obj_data = {
             'name': name,
-            'id': id,
-            'aabb': obj['aabb'].flatten().tolist(),
-            'obb': poly2obb_3d(obj['coords']).tolist(),
+            'id': id_map[name],
+            'aabb': instance['aabb'].flatten().tolist(),
+            'obb': poly2obb_3d(instance['obb_corners']).tolist(),
+            'uid': instance['uid'],
         }
 
         metadata['instances'].append(obj_data)

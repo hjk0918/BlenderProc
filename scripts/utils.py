@@ -7,6 +7,8 @@ import matplotlib.pyplot as plt
 from mpl_toolkits.mplot3d import Axes3D
 import numpy as np
 import random
+import bpy
+import bmesh
 from mathutils import Vector, Matrix
 
 
@@ -155,3 +157,76 @@ def obb2ngp(obb_3d):
     orientation = np.array([[Cos, -Sin, 0], [Sin, Cos, 0], [0, 0, 1]])
 
     return extents.tolist(), orientation.tolist(), position.tolist()
+
+
+# modified from https://blender.stackexchange.com/a/261052
+def compute_objects_bbox(objects):
+    '''
+    Compute the bounding box of a list of objects
+    Return: 
+        (8, 3) OBB corners, [[x1, y1, z1], [x2, y2, z2], ...]
+        (2, 3) AABB min and max, [[xmin, ymin, zmin], [xmax, ymax, zmax]]
+    '''
+
+    verts = []
+    for obj in objects:
+        bm = bmesh.new()
+        bm.from_mesh(obj.get_mesh())
+        mat = Matrix(obj.get_local2world_mat())
+        bmesh.ops.transform(bm, matrix=mat, verts=bm.verts)
+
+        cur_verts = np.array([v.co for v in bm.verts])
+        verts.append(cur_verts)
+
+        bm.free()
+
+    if len(objects) == 1:
+        obj = objects[0]
+        aabb = np.stack([np.min(verts[0], axis=0), np.max(verts[0], axis=0)], axis=0)
+        return np.array(obj.get_bound_box()), aabb
+
+    points = np.concatenate(verts, axis=0)
+
+    # compute OBB with yaw only
+    points_2d = points[:, :2]
+    cov = np.cov(points_2d, y=None, rowvar=False, bias=True)
+    eig_vals, eig_vecs = np.linalg.eigh(cov)
+
+    change_of_basis_mat = eig_vecs
+    inv_change_of_basis_mat = np.linalg.inv(change_of_basis_mat)
+
+    aligned = points_2d @ inv_change_of_basis_mat.T
+
+    co_min = np.min(aligned, axis=0)
+    co_max = np.max(aligned, axis=0)
+
+    xmin, xmax = co_min[0], co_max[0]
+    ymin, ymax = co_min[1], co_max[1]
+    zmin, zmax = np.min(points[:, 2]), np.max(points[:, 2])
+
+    xdif = (xmax - xmin) * 0.5
+    ydif = (ymax - ymin) * 0.5
+    zdif = (zmax - zmin) * 0.5
+
+    cx = xmin + xdif
+    cy = ymin + ydif
+    cz = zmin + zdif
+
+    corners = np.array([
+        [cx - xdif, cy - ydif, cz - zdif],
+        [cx - xdif, cy + ydif, cz - zdif],
+        [cx + xdif, cy + ydif, cz - zdif],
+        [cx + xdif, cy - ydif, cz - zdif],
+        [cx - xdif, cy - ydif, cz + zdif],
+        [cx - xdif, cy + ydif, cz + zdif],
+        [cx + xdif, cy + ydif, cz + zdif],
+        [cx + xdif, cy - ydif, cz + zdif],
+    ])
+
+    corners[:, :2] = corners[:, :2] @ change_of_basis_mat.T
+
+    aabb_min = np.min(points, axis=0)
+    aabb_max = np.max(points, axis=0)
+    aabb = np.stack([aabb_min, aabb_max], axis=0)
+
+    return corners, aabb

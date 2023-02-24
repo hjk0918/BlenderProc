@@ -1,6 +1,6 @@
 cached
 display*
-FRONT3D_render
+FRONT3D_render*
 temp_*
 
 __pycache__
