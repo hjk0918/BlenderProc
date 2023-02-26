@@ -1,30 +1,34 @@
-
-import yaml
 import subprocess
 import sys
+import json
+import os
 
-with open('./scripts/room_configs.yaml', 'r') as f:
-    ALL_ROOM_CONFIG = yaml.load(f, Loader=yaml.FullLoader)
+with open('/data/bhuai/front3d_blender/render_plan.json', 'r') as f:
+    render_plan = json.load(f)
 
-skip = {1003: [0,1,2,3], 1005: [0,1], 1008: [0], 1009:[0]}
+layout_dir = '/data/bhuai/3D-FRONT'
+scene_list = sorted(os.listdir(layout_dir))
 
+output_dir = '/data/bhuai/BlenderProc/FRONT3D_render'
+existed_scenes = sorted(os.listdir(output_dir))
 
-all_scene_keys = ALL_ROOM_CONFIG.keys()
-all_skip_keys = skip.keys()
-for i in range(1038, 1041):
-    if i not in all_scene_keys:
-        print(f'Scene {i} does not have config.')
+scenes = list(render_plan.keys())[::-1]
+
+for scene in scenes:
+    rooms = render_plan[scene]['rooms']
+    scene_idx = int(scene.split('_')[-1])
+
+    if scene_list[scene_idx].split('.')[0] != render_plan[scene]['scene_id']:
+        print(f"Scene id mismatch: {scene_list[scene_idx]} {render_plan[scene]['scene_id']}")
         continue
-    scene_info = ALL_ROOM_CONFIG[i]
 
+    for r, room in enumerate(rooms):
+        if f'3dfront_{scene_idx:04d}_{r:02d}' in existed_scenes:
+            print(f"3dfront_{scene_idx:04d}_{r:02d} already exists.")
+            continue
 
-    scene_room_configs = scene_info.keys()
+        print(f"Rendering scene {scene}, room {r}: {room}")
 
-    for r in scene_room_configs:
-        if i in all_skip_keys:
-            if r in skip[i]:
-                print(f'Skip room {r} of scene {i}.')
-                continue
-        bashCommand = f"python cli.py run ./scripts/render.py --gpu 1 -s {i} -r {r} --render -nc"
+        bashCommand = f"python cli.py run ./scripts/render.py -s {scene_idx} -r {r} --mode render -nc --gpu 7"
         process = subprocess.Popen(bashCommand.split(), stderr=sys.stderr, stdout=sys.stdout)
         output, error = process.communicate()

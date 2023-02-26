@@ -612,6 +612,9 @@ def main():
     construct_scene_list()
 
     bproc.init(compute_device='cuda:0', compute_device_type=COMPUTE_DEVICE_TYPE)
+    bproc.renderer.set_noise_threshold(0.1)
+    bproc.renderer.set_max_amount_of_samples(256)
+    
     scene_objects = load_scene_objects(SCENE_LIST[args.scene_idx])
     # scene_objs_dict = build_and_save_scene_cache(cache_dir, scene_objects)
 
