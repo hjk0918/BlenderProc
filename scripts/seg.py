@@ -1,5 +1,6 @@
 from pysdf import SDF
 import numpy as np
+import json
 import bpy
 import bmesh
 import mathutils
@@ -77,7 +78,7 @@ def build_segmentation_map(room_objs, room_bbox, max_res, res=None):
     return instance_map, res
 
 
-def build_metadata(id_map, instances, room_bbox):
+def build_metadata(id_map, instances, room_bbox, model_info_path):
     """Builds metadata of the room.
 
     Args:
@@ -87,6 +88,11 @@ def build_metadata(id_map, instances, room_bbox):
     Returns:
         (dict): Dictionary of the room metadata.
     """
+
+    with open(model_info_path, 'r') as f:
+        model_info = json.load(f)
+
+    uid2info = {info['model_id']: info for info in model_info}
 
     metadata = {}
     metadata['scene_bbox'] = room_bbox.flatten().tolist()
@@ -106,6 +112,9 @@ def build_metadata(id_map, instances, room_bbox):
             'aabb': instance['aabb'].flatten().tolist(),
             'obb': poly2obb_3d(instance['obb_corners']).tolist(),
             'uid': instance['uid'],
+            'jid': instance['jid'],
+            'super-category': uid2info[instance['jid']]['super-category'],
+            'category': uid2info[instance['jid']]['category'],
         }
 
         metadata['instances'].append(obj_data)

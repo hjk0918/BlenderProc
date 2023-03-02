@@ -51,6 +51,7 @@ sin = np.sin
 COMPUTE_DEVICE_TYPE = "CUDA"
 
 RENDER_PLAN_PATH = '/data/bhuai/front3d_blender/render_plan.json'
+MODEL_INFO_PATH = '/data/bhuai/3D-FUTURE-model/model_info.json'
 
 
 def construct_scene_list():
@@ -392,6 +393,7 @@ def get_instance_data(objects):
     Merge mesh of the same instance, compute new bounding box, and rename the object.
     '''
     uid2instances = defaultdict(list)
+    uid2jid = {}
 
     for obj in objects:
         if not obj.has_cp('is_filtered'):
@@ -401,8 +403,10 @@ def get_instance_data(objects):
             continue
 
         uid = obj.get_cp('uid')
+        jid = obj.get_cp('jid')
         instance_id = obj.get_cp('uid_instance_id')
         uid2instances[uid].append((instance_id, obj))
+        uid2jid[uid] = jid
 
     instance_data = []
     for uid, instances in uid2instances.items():
@@ -422,6 +426,7 @@ def get_instance_data(objects):
                 'aabb': aabb,
                 'instance_id': instance_id,
                 'uid': uid,
+                'jid': uid2jid[uid],
                 'objects': instance_objs,
             }
 
@@ -720,17 +725,17 @@ def main():
         id_map = build_id_map(instance_data)
         print('Number of objects in the room: ', len(instance_data))
 
-        data_path = os.path.join('/data/bhuai/3dfront_rpn_data/features_256',
-                                 f'3dfront_{args.scene_idx:04d}_{args.room_idx:02d}.npz')
-        if not os.path.exists(data_path):
-            return
-        data = np.load(data_path)
-        res = data['resolution']
-        res = res[[2, 0, 1]]
-        res = res.astype(np.int32)
+        # data_path = os.path.join('/data/bhuai/3dfront_rpn_data/features_256',
+        #                          f'3dfront_{args.scene_idx:04d}_{args.room_idx:02d}.npz')
+        # if not os.path.exists(data_path):
+        #     return
+        # data = np.load(data_path)
+        # res = data['resolution']
+        # res = res[[2, 0, 1]]
+        # res = res.astype(np.int32)
 
         # ins_map, res = build_segmentation_map(room_objs, room_bbox, args.seg_res, res)
-        metadata = build_metadata(id_map, instance_data, room_bbox)
+        metadata = build_metadata(id_map, instance_data, room_bbox, MODEL_INFO_PATH)
         
         mask_dir = os.path.join(args.render_root, 'masks')
         os.makedirs(mask_dir, exist_ok=True)
@@ -739,6 +744,7 @@ def main():
 
         scene_name = f'3dfront_{args.scene_idx:04d}_{args.room_idx:02d}'
         metadata['scene_name'] = scene_name
+        metadata['scene_id'] = os.path.basename(SCENE_LIST[args.scene_idx]).split('.')[0]
 
         # np.save(os.path.join(mask_dir, scene_name + '.npy'), ins_map)
         with open(os.path.join(metadata_dir, scene_name + '.json'), 'w') as f:
@@ -759,6 +765,19 @@ def main():
         seg_dir = os.path.join(args.render_root, 'seg', scene_name)
         os.makedirs(seg_dir, exist_ok=True)
         bproc.writer.write_hdf5(seg_dir, data)
+
+        # Render depth at the same time
+        bproc.renderer.set_max_amount_of_samples(1)
+        bproc.renderer.set_noise_threshold(0)
+        bproc.renderer.set_denoiser(None)
+        bproc.renderer.set_light_bounces(1, 0, 0, 1, 0, 8, 0)
+        bproc.renderer.enable_depth_output(activate_antialiasing=False)
+
+        depth_data = bproc.renderer.render()
+        
+        depth_dir = os.path.join(args.render_root, 'depth', scene_name)
+        os.makedirs(depth_dir, exist_ok=True)
+        bproc.writer.write_hdf5(depth_dir, {'depth': depth_data['depth']})
 
     elif args.mode == 'depth':
         # Render depth images

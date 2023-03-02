@@ -336,6 +336,7 @@ class Front3DLoader:
                     obj.set_name(used_obj_name)
                     # add some custom properties
                     obj.set_cp("uid", ele["uid"])
+                    obj.set_cp("jid", ele["jid"])
                     # this custom property determines if the object was used before
                     # is needed to only clone the second appearance of this object
                     obj.set_cp("is_used", False)
