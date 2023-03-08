@@ -417,8 +417,8 @@ def get_instance_data(objects):
 
             # merge mesh
             obb_corners, aabb = compute_objects_bbox(instance_objs)
-            name = instance_objs[0].get_name().split('.')[0]
-            name = f'{name}.{instance_id:03d}'
+            name = instance_objs[0].get_name()
+            # name = f'{name}.{instance_id:03d}'
 
             data = {
                 'name': name,
@@ -440,6 +440,7 @@ def build_id_map(instances):
     id_map = {}
     for instance in instances:
         cur_id = len(id_map) + 1
+        assert instance['name'] not in id_map, f'Instance name {instance["name"]} already exists.'
         id_map[instance['name']] = cur_id
         for obj in instance['objects']:
             obj.set_cp('instance_name', instance['name'])
@@ -749,6 +750,8 @@ def main():
         # np.save(os.path.join(mask_dir, scene_name + '.npy'), ins_map)
         with open(os.path.join(metadata_dir, scene_name + '.json'), 'w') as f:
             json.dump(metadata, f, indent=2)
+
+        # return
 
         # Render 2D segmentation masks
         poses_file = os.path.join(args.pose_dir, scene_name, 'train', 'transforms.json')
